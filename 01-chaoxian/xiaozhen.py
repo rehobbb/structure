@@ -1,30 +1,48 @@
 import re,pandas as pd
-def findchunks(indicators,endflag,allfile):
-    chunks = []
-    for indicator in indicators.values():
-        i=0
-        findTarget = False
-        chunk = []
-        while i<len(allfile):
-            if indicator in allfile[i]:
-                findTarget = True
-                chunk.append(allfile[i])
-                i += 1
-                continue
-            if findTarget:
-                if endflag in allfile[i]:
+from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
+#  ***************************    
+def find_chunk(indicator,endflag,file_list):
+    chunk = []
+    i = 0 
+    find_target = False
+    end_count = 0
+    while i<len(file_list):
+        if indicator in file_list[i]:
+            find_target = True
+            chunk.append(file_list[i])
+            i += 1
+            continue
+        if find_target:
+            if endflag == '**':
+                if endflag in file_list[i]:
+                    end_count += 1
+                if end_count == 2:
                     break
                 else :
-                    chunk.append(allfile[i])
+                    chunk.append(file_list[i])
                     i += 1
                     continue
-            i += 1
+            else:
+                if endflag in file_list[i]:
+                    break
+                else :
+                    chunk.append(file_list[i])
+                    i += 1
+                    continue
+        i += 1
+    return chunk
+#  ***************************    
+def find_chunks(indicators,endflag,file_list):
+    chunks = []
+    for indicator in indicators.values():
+        chunk = find_chunk(indicator,endflag,file_list)
         chunks.append(chunk)
     return chunks
-
+#  ***************************    
 def is_contained(target,string_list):
     return any(target in s for s in string_list)
-
+#  ***************************    
 def get_disp_data(onechunk,index,data_a,indi_key,f_ratio):
     i = 0
     while i<len(onechunk):
@@ -72,8 +90,7 @@ def get_eforce_data(onechunk,e_index,data_a,indi_key):
             i += 1
             continue
         i += 1
-
-
+#  ***************************    
 def get_wforce_data(onechunk,w_index,data_a):
     i = 0
     while i <len(onechunk):
@@ -97,24 +114,37 @@ def get_wforce_data(onechunk,w_index,data_a):
                 data_a.append(dict)
             i += 1
             continue
+        
         i += 1
-
-#  ***************************   
-direct1 = input('pleas input the directory:')
-direct_disp = direct1 + '\\wdisp.out'
-direct_force_e = direct1 + '\\wzq.out'
-direct_force_w = direct1 + '\\wmass.out'
+#  ***************************  
+def get_ratiov_data(onechunk,ratiov_index,data_a):
+    i = 0
+    while i <len(onechunk):
+        parts = onechunk[i].split()
+        if parts[0].isdigit():
+            floor = int(parts[0])
+            ratio_vx = float(parts[ratiov_index])
+            ratio_vy = float(parts[ratiov_index+1])
+            exist_dict = next((item for item in data_a if item['floor'] == floor),None)
+            if exist_dict:
+                exist_dict['ratio_vx'] = round(ratio_vx,2)
+                exist_dict['ratio_vy'] = round(ratio_vy,2)
+            else:
+                dict = {'floor':floor,'ratio_vx':round(ratio_vx,2),'ratio_vy':round(ratio_vy,2)}
+                data_a.append(dict)
+            i += 1
+            continue
+        i += 1
+# ********************* 
+direct = input('pleas input the directory:')
+direct_disp = direct + '\\wdisp.out'
+direct_force_e = direct + '\\wzq.out'
+direct_force_m = direct + '\\wmass.out'
 d_index = 3
 e_index = 3
 w_index = 4
+ratiov_index = 4
 f_ratio = '规定'
-with open(direct_disp,'r') as file_0:
-    allfile_disp = file_0.readlines()
-with open(direct_force_e,'r') as file_1:
-    allfile_force_e = file_1.readlines()
-with open(direct_force_w,'r') as file_2:
-    allfile_force_w = file_2.readlines()
-# 01. 找到对应字符串行范围
 indicators_disp = {
     'ex_disp':'X 方向地震作用下的楼层最大位移',
     'ey_disp':'Y 方向地震作用下的楼层最大位移' ,
@@ -129,39 +159,53 @@ indicators_force_e = {
     'ex':'各层 X 方向的作用力(CQC)',
     'ey':'各层 Y 方向的作用力(CQC)',
 }
-indicators_force_w = {'w':'                           风荷载信息'}
+indicator_force_w = '                           风荷载信息'
+indicator_ratio_v = '楼层抗剪承载力验算'
 endflag_disp = '=='
 endflag_force_e = '='
 endflag_force_w = '各楼层等效尺寸'
-datachunks_disp = findchunks(indicators_disp,endflag_disp,allfile_disp)
-datachunks_e_force = findchunks(indicators_force_e,endflag_force_e,allfile_force_e)
-datachunks_w_force = findchunks(indicators_force_w,endflag_force_w,allfile_force_w) 
-f_datachunks_disp = [ [s for s in tmpchunk if s.strip()]
-    for tmpchunk in datachunks_disp
-]
-f_datachunks_force_e = [[s for s in tmpchunk if s.strip()]
-    for tmpchunk in datachunks_e_force
-]
-f_datachunks_force_w = [[s for s in tmpchunk if s.strip()]
-    for tmpchunk in datachunks_w_force
-]
-
-
-# 02. 处理字符串
+endflag_ratio_v = '**'
 data_a = []
 indi_keys_disp = list(indicators_disp.keys())
 indi_keys_force_e = list(indicators_force_e.keys())
-for onechunk,indi_key in zip(f_datachunks_disp ,indi_keys_disp):
-    get_disp_data(onechunk,d_index,data_a,indi_key,f_ratio)
-for onechunk,indi_key in zip(f_datachunks_force_e ,indi_keys_force_e):
-    get_eforce_data(onechunk,e_index,data_a,indi_key)
-get_wforce_data(f_datachunks_force_w[0],w_index,data_a)
-# with open(direct1+'\\data3.csv','w',newline='') as file3:
-#     headers = data_a[0].keys()
-#     writer = csv.DictWriter(file3,fieldnames=headers)
-#     writer.writeheader()
-#     writer.writerows(data_a)
-# 04. 存入到表格
-df = pd.DataFrame(data_a)
-df.to_excel(direct1+'\\data3.xlsx',index=False)
+with open(direct_disp,'r') as file_d:
+    allfile_disp = file_d.readlines()
+    datachunks_disp = find_chunks(indicators_disp,endflag_disp,allfile_disp)
+    f_datachunks_disp = [ [s for s in tmpchunk if s.strip()]
+    for tmpchunk in datachunks_disp]
+    for onechunk,indi_key in zip(f_datachunks_disp ,indi_keys_disp):
+        get_disp_data(onechunk,d_index,data_a,indi_key,f_ratio)
+with open(direct_force_e,'r') as file_e:
+    allfile_force_e = file_e.readlines()
+    datachunks_e_force = find_chunks(indicators_force_e,endflag_force_e,allfile_force_e)
+    f_datachunks_force_e = [[s for s in tmpchunk if s.strip()]
+    for tmpchunk in datachunks_e_force]
+    for onechunk,indi_key in zip(f_datachunks_force_e ,indi_keys_force_e):
+         get_eforce_data(onechunk,e_index,data_a,indi_key)
+with open(direct_force_m,'r') as file_m:
+    allfile_force_m = file_m.readlines()
+    datachunk_w_force = find_chunk(indicator_force_w,endflag_force_w,allfile_force_m) 
+    f_datachunk_force_w = [s for s in datachunk_w_force if s.strip()]
+    get_wforce_data(f_datachunk_force_w,w_index,data_a)
+    datachunk_ratio_v = find_chunk(indicator_ratio_v,endflag_ratio_v,allfile_force_m) 
+    f_datachunk_ratio_v = [s for s in datachunk_ratio_v if s.strip()]
+    get_ratiov_data(f_datachunk_ratio_v,ratiov_index,data_a)
+with pd.ExcelWriter(direct + '\\data3.xlsx',engine = 'openpyxl') as writer:
+    df = pd.DataFrame(data_a)
+    df.to_excel(writer,index = False,sheet_name='YJK')
+    worksheet = writer.sheets['YJK']
+    for col in worksheet.iter_cols():
+        max_length = 0
+        for cell in col:
+            cell.alignment = Alignment(horizontal='center',vertical='center')
+            if len(str(cell.value)) > max_length:
+                max_length = len(str(cell.value))
+        column_letter = get_column_letter(col[0].column)
+        worksheet.column_dimensions[column_letter].width = max_length + 2
+
+
+
+
+
+
 
