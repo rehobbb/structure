@@ -114,7 +114,6 @@ def get_wforce_data(onechunk,w_index,data_a):
                 data_a.append(dict)
             i += 1
             continue
-        
         i += 1
 #  ***************************  
 def get_ratiov_data(onechunk,ratiov_index,data_a):
@@ -136,10 +135,39 @@ def get_ratiov_data(onechunk,ratiov_index,data_a):
             continue
         i += 1
 # ********************* 
+def get_ratios_data(onechunk,s_structure,data_a):
+    i = 0
+    floor_chunks = []
+    if '剪' in s_structure:
+        rs_x = 'Ratx2'
+    else:
+        rs_x = 'Ratx1'
+    pattern = r'[\d.]+'
+    while i <len(onechunk):
+        if 'Floor' in onechunk[i]:
+            tmp_chunks = find_chunk('Floor','--',onechunk[i:])
+            floor_chunks.append(tmp_chunks)
+        i += 1
+    for floor_chunk in floor_chunks:  
+        while i <len(floor_chunk):
+            floor = re.search(r'\d+',floor_chunk[i]).group()
+            if rs_x in floor_chunk[i]:
+                ratio_x,ratio_y = map(float,re.findall(pattern,floor_chunk[i]))
+                exist_dict = next((item for item in data_a if item['floor'] == int(floor)),None)
+                if exist_dict:
+                    exist_dict['ratio_sx'] = round(ratio_x,2)
+                    exist_dict['ratio_sy'] = round(ratio_y,2)
+                else:
+                    dict = {'floor':int(floor),'ratio_sx':round(ratio_x,2),'ratio_y':round(ratio_sy,2)}
+                    data_a.append(dict)
+                break
+        i += 1
+#  ***************************    
 direct = input('pleas input the directory:')
-direct_disp = direct + '\\wdisp.out'
-direct_force_e = direct + '\\wzq.out'
-direct_force_m = direct + '\\wmass.out'
+direct_wdisp = direct + '\\wdisp.out'
+direct_wzq = direct + '\\wzq.out'
+direct_wmass = direct + '\\wmass.out'
+s_structure = ''
 d_index = 3
 e_index = 3
 w_index = 4
@@ -161,35 +189,45 @@ indicators_force_e = {
 }
 indicator_force_w = '                           风荷载信息'
 indicator_ratio_v = '楼层抗剪承载力验算'
+indicator_ratio_s = '各层刚心、偏心率、相邻层侧移刚度比等计算信息'
 endflag_disp = '=='
 endflag_force_e = '='
 endflag_force_w = '各楼层等效尺寸'
 endflag_ratio_v = '**'
+endflag_ratio_s = '**'
 data_a = []
 indi_keys_disp = list(indicators_disp.keys())
 indi_keys_force_e = list(indicators_force_e.keys())
-with open(direct_disp,'r') as file_d:
-    allfile_disp = file_d.readlines()
-    datachunks_disp = find_chunks(indicators_disp,endflag_disp,allfile_disp)
+with open(direct_wdisp,'r') as file_d:
+    allfile_wdisp = file_d.readlines()
+    datachunks_disp = find_chunks(indicators_disp,endflag_disp,allfile_wdisp)
     f_datachunks_disp = [ [s for s in tmpchunk if s.strip()]
     for tmpchunk in datachunks_disp]
     for onechunk,indi_key in zip(f_datachunks_disp ,indi_keys_disp):
         get_disp_data(onechunk,d_index,data_a,indi_key,f_ratio)
-with open(direct_force_e,'r') as file_e:
-    allfile_force_e = file_e.readlines()
-    datachunks_e_force = find_chunks(indicators_force_e,endflag_force_e,allfile_force_e)
+with open(direct_wzq,'r') as file_e:
+    allfile_wzq = file_e.readlines()
+    datachunks_e_force = find_chunks(indicators_force_e,endflag_force_e,allfile_wzq)
     f_datachunks_force_e = [[s for s in tmpchunk if s.strip()]
     for tmpchunk in datachunks_e_force]
     for onechunk,indi_key in zip(f_datachunks_force_e ,indi_keys_force_e):
          get_eforce_data(onechunk,e_index,data_a,indi_key)
-with open(direct_force_m,'r') as file_m:
-    allfile_force_m = file_m.readlines()
-    datachunk_w_force = find_chunk(indicator_force_w,endflag_force_w,allfile_force_m) 
+with open(direct_wmass,'r') as file_m:
+    allfile_wmass = file_m.readlines()
+    for line in allfile_wmass:
+        if '结构总体信息' in line:
+            s_tmp = allfile_wmass[allfile_wmass.index(line)+1]
+            s_structure = re.search(r'\s*\w+:\s*(\w+)',s_tmp).group(1)
+            break
+    datachunk_w_force = find_chunk(indicator_force_w,endflag_force_w,allfile_wmass) 
     f_datachunk_force_w = [s for s in datachunk_w_force if s.strip()]
     get_wforce_data(f_datachunk_force_w,w_index,data_a)
-    datachunk_ratio_v = find_chunk(indicator_ratio_v,endflag_ratio_v,allfile_force_m) 
+    datachunk_ratio_v = find_chunk(indicator_ratio_v,endflag_ratio_v,allfile_wmass) 
     f_datachunk_ratio_v = [s for s in datachunk_ratio_v if s.strip()]
     get_ratiov_data(f_datachunk_ratio_v,ratiov_index,data_a)
+    datachunk_ratio_s = find_chunk(indicator_ratio_s,endflag_ratio_s,allfile_wmass) 
+    f_datachunk_ratio_s = [s for s in datachunk_ratio_s if s.strip()]
+    get_ratios_data(f_datachunk_ratio_s,s_structure,data_a)
 with pd.ExcelWriter(direct + '\\data3.xlsx',engine = 'openpyxl') as writer:
     df = pd.DataFrame(data_a)
     df.to_excel(writer,index = False,sheet_name='YJK')
