@@ -142,26 +142,33 @@ def get_ratios_data(onechunk,s_structure,data_a):
         rs_x = 'Ratx2'
     else:
         rs_x = 'Ratx1'
-    pattern = r'[\d.]+'
-    while i <len(onechunk):
+    pattern = r'\d+.\d+'
+    while i < len(onechunk):
         if 'Floor' in onechunk[i]:
-            tmp_chunks = find_chunk('Floor','--',onechunk[i:])
-            floor_chunks.append(tmp_chunks)
+            result = re.search(r'\d+',onechunk[i])
+            if result:
+                floor = int(result.group())
+                floor_chunk = find_chunk('Floor','--',onechunk[i:])
+                floor_chunks.append(floor_chunk)
+            i += 1
+            continue
         i += 1
     for floor_chunk in floor_chunks:  
-        while i <len(floor_chunk):
-            floor = re.search(r'\d+',floor_chunk[i]).group()
-            if rs_x in floor_chunk[i]:
-                ratio_x,ratio_y = map(float,re.findall(pattern,floor_chunk[i]))
+        j = 0
+        floor = re.search(r'\d+',floor_chunk[0]).group()
+        while j <len(floor_chunk):           
+            if rs_x in floor_chunk[j]:
+                ratio_x,ratio_y = map(float,re.findall(pattern,floor_chunk[j]))
                 exist_dict = next((item for item in data_a if item['floor'] == int(floor)),None)
                 if exist_dict:
                     exist_dict['ratio_sx'] = round(ratio_x,2)
                     exist_dict['ratio_sy'] = round(ratio_y,2)
-                else:
+                else:  
                     dict = {'floor':int(floor),'ratio_sx':round(ratio_x,2),'ratio_y':round(ratio_sy,2)}
                     data_a.append(dict)
-                break
-        i += 1
+                j += 1
+                continue
+            j += 1
 #  ***************************    
 direct = input('pleas input the directory:')
 direct_wdisp = direct + '\\wdisp.out'
