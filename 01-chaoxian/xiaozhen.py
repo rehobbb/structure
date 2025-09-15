@@ -1,8 +1,5 @@
 import re,pandas as pd
-from openpyxl.styles import Alignment
-from openpyxl.utils import get_column_letter
-from openpyxl.chart import ScatterChart,Reference,Series
-from openpyxl.chart.axis import ChartLines
+import xlsxwriter
 
 #  ***************************    
 def find_chunk(indicator,endflag,list):
@@ -255,6 +252,14 @@ def get_ratiov0_data(chunk,index,data):
                 i += 1
                 continue
         i += 1
+def fraction_to_float(fraction):
+    if isinstance(fraction,str) and '/' in fraction:
+        numerator,denominator = fraction.split('/')
+        try:
+            return float(numerator) / float(denominator)
+        except ZeroDivisionError:
+            return 0.0
+    return float(fraction)
 # ********************* 
 direct = input('pleas input the directory:')
 direct_wdisp = direct + '\\wdisp.out'
@@ -337,47 +342,98 @@ with open(direct_wv02q,'r') as file_v:
     f_datachunk_ratio_v0 = [s for s in datachunk_ratio_v0 if s.strip()]
     get_ratiov0_data(f_datachunk_ratio_v0,v0_index,data_a)
 
-with pd.ExcelWriter(direct + '\\data3.xlsx',engine = 'openpyxl') as writer:
+with pd.ExcelWriter(direct + '\\data3.xlsx',engine = 'xlsxwriter') as writer:
     df = pd.DataFrame(data_a)
-    df.to_excel(writer,index = False,sheet_name='YJK')
+    head = df.columns.tolist()
+    for col in head:
+        if 'df' in col:
+            df[col] = df[col].apply(fraction_to_float)
+    df.to_excel(writer,index = False,sheet_name='YJK') 
+    workbook = writer.book
     worksheet = writer.sheets['YJK']
-    for col in worksheet.iter_cols():
-        max_length = 0
-        for cell in col:
-            cell.alignment = Alignment(horizontal='center',vertical='center')
-            if cell.value is not None and len(str(cell.value)) > max_length:
-                max_length = len(str(cell.value))
-        column_letter = get_column_letter(col[0].column)
-        worksheet.column_dimensions[column_letter].width = max_length+1
-    chart = ScatterChart()
-    chart.title = '地震作用下的位移比'
-    chart.style = 1
-    chart.width = 7.6
-    chart.height = 9.5
-    x_data = Reference(worksheet,min_col=6,min_row=2,max_row=worksheet.max_row)
-    y_data = Reference(worksheet,min_col=1,min_row=2,max_row=worksheet.max_row)
-    series = Series(y_data,xvalues=x_data,title = 'YJK')
-    series.graphicalProperties.solidFill = '0070C0'
-    series.graphicalProperties.line.width = 20000
-    chart.series.append(series)
-    x_axis = chart.x_axis
-    y_axis = chart.y_axis
-    x_axis.title = '位移角'
-    x_axis.scaling.min = 0
-    x_axis.scaling.max = 1.5
-    x_axis.major_unit = 0.5
-    x_axis.minor_unit = 0.1
-    x_axis.majorGridlines = ChartLines()
-    x_axis.majorGridlines.solidFill = 'D0CECE'
-    y_axis.title = '楼层'
-    y_axis.scaling.min = 0
-    y_axis.scaling.max = 30
-    y_axis.major_unit = 5
-    y_axis.minor_unit = 1
-    y_axis.majorGridlines = ChartLines()
-    y_axis.majorGridlines.solidFill = 'D0CECE'
-    chart.legend.position = 'r'
-    worksheet.add_chart(chart, 'a'+str(worksheet.max_row+3))
+    for i , col in enumerate(head[1:]):
+        chart = workbook.add_chart(
+            {
+                'type':'scatter',
+                'subtype':'smooth'
+            }
+        )
+        chart.add_series(
+            {
+                'name':col,
+                'categories':['YJK',1,df.columns.get_loc(col),len(df),df.columns.get_loc(col)],
+                'values':['YJK',1,0,len(df),0],
+                'line':{'color':'blue','width':2.25}
+            }
+        )
+        chart.set_title({
+            'name':col,
+            'name_font':{
+                'name':'Arial',
+                'size':12,
+                'bold':True,
+                'color':'black'
+            },
+        })
+        chart.set_x_axis({
+            'name':col,
+            'num_font':{'size':10},
+            'name_font':{'size':10},
+            'major_gridlines':{
+                'visible':True,
+                'line':{'color':'gray','width':0.5,'dash_type':'long_dash'}
+            },
+        })
+        chart.set_y_axis({
+            'name':'楼层',
+            'num_font':{'size':10},
+            'name_font':{'size':10},
+            'major_gridlines':{
+                'visible':True,
+                'line':{'color':'gray','width':0.5,'dash_type':'long_dash'}
+            },
+        })
+        cm_to_px_width = 36.5
+        cm_to_px_height = 41
+        chart.set_size({
+            'width':int(7 * cm_to_px_width),
+            'height':int(9.5* cm_to_px_height)
+        })
+        chart.set_legend({
+            'position':'right',
+            'font':{
+                'name':'Arial',
+                'size':10,
+                'bold':False,
+                'color':'black',
+            },
+            'border':{
+                'color':'black',
+                'width':0.7,
+                'dash_type':'solid',
+            },
+            'layout':{
+                'x':0.6,
+                'y':0.4,
+                'width':0.25,
+                'height':0.1,
+            },
+        })
+        chart.set_plotarea({
+            'border':{'none':True},
+            'layout':{
+                'x':0.2,
+                'y':0.15,
+                'width':0.65,
+                'height':0.7,
+            },
+        })
+        chart_col = i * (chart.width // 60)
+        worksheet.insert_chart(len(df)+4,chart_col,chart,{
+            'x_offset':i*5,
+            'y_offset':0,
+        })
+
 
 
 
