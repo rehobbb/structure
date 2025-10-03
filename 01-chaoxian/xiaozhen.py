@@ -260,15 +260,57 @@ def get_ratiov0_data(chunk,index,data):
                 i += 1
                 continue
         i += 1
-def plot_scatter_chart(df,wb,ws,head):
+
+# ********************* 
+def process_df(df,df_head,id_head):
+        df_df = pd.merge(df[['fl']],df[df_head],left_index=True,right_index=True)
+        df_id = pd.merge(df[['fl']],df[id_head],left_index=True,right_index=True)
+        for key,value in limit_df.items():
+            df_df[key] = value
+        for key,value in limit_id.items():
+            df_id[key] = value
+        return df_df,df_id
+def output_df(df,writer,sheet_name,head):
+    old_df = df.copy()
+    columns_head = list(head.keys())
+    columns = df.columns.tolist()
+    for col in columns:
+        if 'df' in col:
+            df[col] = df[col].apply(fraction_to_float)
+    df.to_excel(writer,index = False,sheet_name=sheet_name,startrow=2,header=False) 
+    ws = writer.sheets[sheet_name]
+    for col_idx,col_name in enumerate(columns): 
+        if col_name == 'fl':
+            ws.write(3+len(df),col_idx,'最大值')
+            ws.write(4+len(df),col_idx,'所在楼层')
+        if col_name in columns_head:
+            ws.write(1,col_idx,'YJK')
+            ws.write(3+len(df),col_idx,old_df[df[col_name]==df[col_name].max()][col_name].values[0])
+            ws.write(4+len(df),col_idx,old_df[df[col_name] == df[col_name].max()]['fl'].values[0])
+        elif 'limit' in col_name:
+            ws.write(1,col_idx,col_name)
+    ws.write(0,0,'楼层')
+    start_cols = [i for i,col in enumerate(columns) if col in columns_head]
+    for i,name in enumerate(columns_head):
+        start_col = start_cols[i]
+        end_col = start_cols[i+1]-1 if i<len(columns_head)-1 else len(columns_head)
+        if end_col-start_col == 0 :
+            ws.write(0,start_col,head[name])
+        else:
+             ws.merge_range(0,start_col,0,end_col,head[name])    
+# ********************* 
+def plot_scatter_chart(df,wb,ws,head,plot,limit):
+    columns_head = list(head.keys())
     format_data = wb.add_format(
         {
             'align':'center',
             'valign':'vcenter',
+            'text_wrap':True,
         }
     )
-    ws.set_column(0,len(head),None,format_data)
-    for i , col in enumerate(head[1:]):
+    ws.set_column(0,30,10,format_data)
+    j,k = 0,0
+    for i , col in enumerate(columns_head):
         chart = wb.add_chart(
             {
                 'type':'scatter',
@@ -278,13 +320,43 @@ def plot_scatter_chart(df,wb,ws,head):
         chart.add_series(
             {
                 'name':col,
-                'categories':[ws.name,1,df.columns.get_loc(col),len(df),df.columns.get_loc(col)],
-                'values':[ws.name,1,0,len(df),0],
+                'categories':[ws.name,2,df.columns.get_loc(col),len(df)+1,df.columns.get_loc(col)],
+                'values':[ws.name,2,0,len(df)+1,0],
                 'line':{'color':'blue','width':2.25}
             }
         )
+        if plot[col][1] != '':
+            limit_col = plot[col][1]
+            if limit_col in limit.keys():
+                chart.add_series(
+                    {
+                        'name':'限值',
+                        'categories':[ws.name,2,df.columns.get_loc(limit_col),len(df)+1,df.columns.get_loc(limit_col)],
+                        'values':[ws.name,2,0,len(df)+1,0],
+                        'line':{'color':'red','width':2.25,'dash_type':'dash'}
+                    }
+                )
+            else :
+                limit_col_d = limit_col + 'd'
+                limit_col_u = limit_col + 'u'
+                chart.add_series(
+                    {
+                        'name':'限值_d',
+                        'categories':[ws.name,2,df.columns.get_loc(limit_col_d),len(df)+1,df.columns.get_loc(limit_col_d)],
+                        'values':[ws.name,2,0,len(df)+1,0],
+                        'line':{'color':'red','width':2.25,'dash_type':'dash'}
+                    }
+                )
+                chart.add_series(
+                    {
+                        'name':'限值_u',
+                        'categories':[ws.name,2,df.columns.get_loc(limit_col_u),len(df)+1,df.columns.get_loc(limit_col_u)],
+                        'values':[ws.name,2,0,len(df)+1,0],
+                        'line':{'color':'black','width':2.25,'dash_type':'dash'}
+                    }
+                )
         chart.set_title({
-            'name':col,
+            'name':head[col],
             'name_font':{
                 'name':'Arial',
                 'size':12,
@@ -293,7 +365,7 @@ def plot_scatter_chart(df,wb,ws,head):
             },
         })
         chart.set_x_axis({
-            'name':col,
+            'name':plot[col][0],
             'num_font':{'size':10},
             'name_font':{'size':10},
             'major_gridlines':{
@@ -340,86 +412,25 @@ def plot_scatter_chart(df,wb,ws,head):
             'border':{'none':True},
             'layout':{
                 'x':0.2,
-                'y':0.10,
+                'y':0.12,
                 'width':0.65,
                 'height':0.75,
             },
         })
-        chart_col = i * (chart.width // 60)
-        ws.insert_chart(len(df)+4,chart_col,chart,{
-            'x_offset':i*5,
-            'y_offset':0,
-        })
-# ********************* 
-def process_df(df,df_list,id_list):
-        df_df = pd.merge(df[['fl']],df[df_list],left_index=True,right_index=True)
-        df_id = pd.merge(df[['fl']],df[id_list],left_index=True,right_index=True)
-        df_df.insert(loc=df_df.columns.get_loc('ex_df')+1,column='limit_dfe1',value=limit_dfe_f)
-        df_df.insert(loc=df_df.columns.get_loc('ey_df')+1,column='limit_dfe2',value=limit_dfe_f)
-        df_df.insert(loc=df_df.columns.get_loc('wx_df')+1,column='limit_dfw1',value=limit_dfw_f)
-        df_df.insert(loc=df_df.columns.get_loc('wy_df')+1,column='limit_dfw2',value=limit_dfw_f)
-        for i,col in enumerate(['ex+_dr','ex-_dr','ey+_dr','ey-_dr']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_drd'+str(i),value=limit_dr_d)
-            df_id.insert(loc=df_id.columns.get_loc(col)+2,column='limit_dru'+str(i),value=limit_dr_u)
-        for i,col in enumerate(['ex_vmr','ey_vmr']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_vmr'+str(i),value=limit_vmr)
-        for i,col in enumerate(['r_vcx','r_vcy']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_vc'+str(i),value=limit_vc)
-        for i,col in enumerate(['r_sx','r_sy']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_s'+str(i),value=limit_stiff)
-        for i,col in enumerate(['r_mx','r_my']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_md'+str(i),value=limit_md)
-            df_id.insert(loc=df_id.columns.get_loc(col)+2,column='limit_mu'+str(i),value=limit_mu)
-        for i,col in enumerate(['r_vx','r_vy']):
-            df_id.insert(loc=df_id.columns.get_loc(col)+1,column='limit_vx'+str(i),value=limit_v0)
-        return df_df,df_id
-def output_df(df,writer,sheet_name,columns_data,head_list):
-    new_columns = []
-    for col in df.columns:
-        if col in columns_data and col != 'fl':
-            new_columns.append('')
-        new_columns.append(col)
-    new_df = pd.DataFrame(columns=new_columns)
-    for col in new_df.columns:
-        if col in df.columns:
-            new_df[col] = df[col]
-        else:
-            new_df[col] = np.nan
-    for col in new_df.columns.tolist():
-        if 'df' in col:
-            new_df[col] = new_df[col].apply(fraction_to_float)
-    new_df.to_excel(writer,index = False,sheet_name=sheet_name,startrow=2,header=False) 
-    wb = writer.book
-    ws = writer.sheets[sheet_name]
-    for col_idx,col_name in enumerate(new_columns):
-        if col_name == 'fl':
-            ws.write(3+len(df),col_idx,'最大值')
-            ws.write(4+len(df),col_idx,'所在楼层')
-        if col_name in columns_data:
-            ws.write(1,col_idx,'YJK')
-            ws.write(3+len(df),col_idx,df[new_df[col_name]==new_df[col_name].max()][col_name].values[0])
-            ws.write(4+len(df),col_idx,df[new_df[col_name] == new_df[col_name].max()]['fl'].values[0])
-        elif 'limit' in col_name:
-            ws.write(1,col_idx,'LIMIT')
-    ws.write(0,0,'楼层')
-    start_cols = [i for i,col in enumerate(new_columns) if col in columns_data]
-    for i,name in enumerate(columns_data):
-        start_col = start_cols[i]
-        end_col = start_cols[i+1]-2 if i<len(columns_data)-1 else len(new_columns)-1
-        if end_col-start_col == 0 :
-            ws.write(0,start_col,head_list[name])
-        else:
-             ws.merge_range(0,start_col,0,end_col,head_list[name])
-    
-        cell_format = wb.add_format({'align':'center','valign':'center'})  
-        for i,col in enumerate(new_columns):
-            if col !='':
-                ws.set_column(i,i,12,cell_format)
-            else:
-                ws.set_column(i,i,5,cell_format)
-    return new_df
-# ********************* 
-
+        if 'x' in col:
+            chart_col = j * (chart.width// 63)
+            ws.insert_chart(len(df)+6,chart_col,chart,{
+                'x_offset':0,
+                'y_offset':0,
+            })
+            j += 1
+        else:           
+            chart_col = k * (chart.width // 63)
+            ws.insert_chart(len(df)+27,chart_col,chart,{
+                'x_offset':0,
+                'y_offset':0,
+            })
+            k += 1
 #*****************************
 data_a = []
 indi_keys_disp = list(indicators_disp.keys())
@@ -469,12 +480,14 @@ with pd.ExcelWriter(direct + '\\data3.xlsx',engine = 'xlsxwriter') as writer:
     story_range = range(story[0],story[1]+1)
     df = df[df['fl'].isin(story_range)]
     df['fl'] = df['fl']-story[0]+1   
-    df_df,df_id =process_df(df,df_list,id_list)
-    df_df = output_df(df_df,writer,'内力位移',df_list,head_df_list)
-    df_id = output_df(df_id,writer,'整体指标',id_list,head_id_list)
-    
-    # plot_scatter_chart(df_df,wb,ws_df,head_df)
-    # plot_scatter_chart(df_id,wb,ws_id,head_id)
+    df_df,df_id =process_df(df,list(head_df.keys()),list(head_id.keys()))
+    output_df(df_df,writer,'内力位移',head_df)
+    output_df(df_id,writer,'整体指标',head_id) 
+    wb = writer.book
+    ws_df = writer.sheets['内力位移']
+    ws_id = writer.sheets['整体指标']
+    plot_scatter_chart(df_df,wb,ws_df,head_df,plot_df,limit_df)
+    plot_scatter_chart(df_id,wb,ws_id,head_id,plot_id,limit_id)
     
  
 

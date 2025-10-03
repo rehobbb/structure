@@ -11,14 +11,21 @@ def fraction_to_float(fraction):
 stories = '3-25'
 limit_dfe = '1/500'
 limit_dfw = '1/500'
-limit_dr_d,limit_dr_u = 1.2,1.5
-limit_vmr = 0.016
-limit_vc = 0.80
-limit_stiff = 1.0
-limit_md,limit_mu = 0.10,0.50
-limit_v0 = 0.10
-limit_dfe_f = fraction_to_float(limit_dfe)
-limit_dfw_f = fraction_to_float(limit_dfw)
+limit_df = {
+    'limit_dfe':fraction_to_float(limit_dfe),
+    'limit_dfw':fraction_to_float(limit_dfw),
+}
+limit_id = {
+    'limit_drd':1.2,
+    'limit_dru':1.5,
+    'limit_vmr':0.016,
+    'limit_vc':0.80,
+    'limit_stf':1.0,
+    'limit_md':0.10,
+    'limit_mu':0.50,
+    'limit_v0d':0.10,
+    'limit_v0u':0.20,
+}
 #*****************************
 #路径及搜索参数
 direct = input('please input the directory:')
@@ -66,29 +73,25 @@ endflag_ratio_m = '**'
 endflag_ratio_v0 = '**'
 #*****************************
 #输出excel参数
-df_list = ['ex_v','ey_v','ex_m','ey_m','wx_v','wy_v','wx_m','wy_m', \
-    'ex_df','ey_df','ex_ds','ey_ds','wx_df','wy_df','wx_ds','wy_ds']
-id_list = ['ex+_dr','ex-_dr','ey+_dr','ey-_dr','ex_vmr','ey_vmr',\
-    'r_vcx','r_vcy','r_sx','r_sy','r_mx','r_my','r_vx','r_vy']
-head_df_list = {
-    'ex_v':'层剪力-地震X',
-    'ey_v':'层剪力-地震Y',
-    'ex_m':'层弯矩-地震X',
-    'ey_m':'层弯矩-地震Y',
-    'wx_v':'层剪力-风X',
-    'wy_v':'层剪力-风Y',
-    'wx_m':'层弯矩-风X',
-    'wy_m':'层弯矩-风Y',
-    'ex_df':'位移角-地震X',
-    'ey_df':'位移角-地震Y',
-    'ex_ds':'位移-地震X',
-    'ey_ds':'位移-地震Y',
-    'wx_df':'位移角-风X',
-    'wy_df':'位移角-风Y',
-    'wx_ds':'位移-风X',
-    'wy_ds':'位移-风Y',
+head_df = {
+    'ex_v':'层剪力-EX',
+    'ey_v':'层剪力-EY',
+    'ex_m':'层弯矩-EX',
+    'ey_m':'层弯矩-EY',
+    'wx_v':'层剪力-WX',
+    'wy_v':'层剪力-WY',
+    'wx_m':'层弯矩-WX',
+    'wy_m':'层弯矩-WY',
+    'ex_df':'位移角-EX',
+    'ey_df':'位移角-EY',
+    'ex_ds':'位移-EX',
+    'ey_ds':'位移-EY',
+    'wx_df':'位移角-WX',
+    'wy_df':'位移角-WY',
+    'wx_ds':'位移-WX',
+    'wy_ds':'位移-WY',
 }
-head_id_list = {
+head_id = {
     'ex+_dr':'位移比-X+',
     'ex-_dr':'位移比-X-',
     'ey+_dr':'位移比-Y+',
@@ -99,8 +102,42 @@ head_id_list = {
     'r_vcy':'抗剪承载力比-Y',
     'r_sx':'侧向刚度比-X',
     'r_sy':'侧向刚度比-Y',
-    'r_mx':'框架弯矩与总倾覆力矩比-X',
-    'r_my':'框架弯矩与总倾覆力矩比-Y',
-    'r_vx':'框架柱地震剪力比-X',
-    'r_vy':'框架柱地震剪力比-Y',
+    'r_mx':'框架倾覆力矩比-X',
+    'r_my':'框架倾覆力矩比-Y',
+    'r_vx':'框架剪力比-X',
+    'r_vy':'框架剪力比-Y',
+}
+plot_df = {
+    'ex_v':['楼层剪力(kN)',''],
+    'ey_v':['楼层剪力(kN)',''],
+    'ex_m':['倾覆弯矩(kN.m)',''],
+    'ey_m':['倾覆弯矩(kN.m)',''],
+    'wx_v':['楼层剪力(kN)',''],
+    'wy_v':['楼层剪力(kN)',''],
+    'wx_m':['倾覆弯矩(kN.m)',''],
+    'wy_m':['倾覆弯矩(kN.m)',''],
+    'ex_df':['位移角','limit_dfe'],
+    'ey_df':['位移角','limit_dfw'],
+    'ex_ds':['位移(mm)',''],
+    'ey_ds':['位移(mm)',''],
+    'wx_df':['位移角','limit_dfw'],
+    'wy_df':['位移角','limit_dfw'],
+    'wx_ds':['位移(mm)',''],
+    'wy_ds':['位移(mm)',''],
+}
+plot_id = {
+    'ex+_dr':['扭转位移比','limit_dr'],
+    'ex-_dr':['扭转位移比','limit_dr'],
+    'ey+_dr':['扭转位移比','limit_dr'],
+    'ey-_dr':['扭转位移比','limit_dr'],
+    'ex_vmr':['剪重比','limit_vmr'],
+    'ey_vmr':['剪重比','limit_vmr'],
+    'r_vcx':['抗剪承载力比','limit_vc'],
+    'r_vcy':['抗剪承载力比','limit_vc'],
+    'r_sx':['侧向刚度比','limit_stf'],
+    'r_sy':['侧向刚度比','limit_stf'],
+    'r_mx':['框架倾覆力矩比','limit_m'],
+    'r_my':['框架倾覆力矩比','limit_m'],
+    'r_vx':['框架剪力比','limit_v0'],
+    'r_vy':['框架剪力比','limit_v0'],
 }
