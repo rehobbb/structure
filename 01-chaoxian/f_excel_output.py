@@ -60,7 +60,7 @@ class ExcelOutput:
             })
             if type == '1':
                 chart.add_series({
-                    'name':col,
+                    'name':'YJK',
                     'categories':[ws.name,2,df.columns.get_loc(col),
                                 len(df)+1,df.columns.get_loc(col)],
                     'values':[ws.name,2,0,len(df)+1,0],
@@ -70,14 +70,14 @@ class ExcelOutput:
                 col1 = col+'-1'
                 col2 = col+'-2'
                 chart.add_series({
-                    'name':col1,
+                    'name':'YJK1',
                     'categories':[ws.name,2,df.columns.get_loc(col1),
                                 len(df)+1,df.columns.get_loc(col1)],
                     'values':[ws.name,2,0,len(df)+1,0],
                     'line':{'color':'blue','width':2.25}
                 })
                 chart.add_series({
-                    'name':col2,
+                    'name':'YJK2',
                     'categories':[ws.name,2,df.columns.get_loc(col2),
                                 len(df)+1,df.columns.get_loc(col2)],
                     'values':[ws.name,2,0,len(df)+1,0],
