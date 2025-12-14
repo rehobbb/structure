@@ -3,8 +3,6 @@ import pandas as pd
 import zipfile
 import os
 import tempfile
-directory = 'D:/03-学习/07-PYTHON/'
-file_path = directory + '钢筋用量.xlsx'
 def repair_excel(file_path):
     # 尝试直接读取
     try:
@@ -44,11 +42,27 @@ def repair_excel(file_path):
         except Exception as e2:
             raise Exception(f"文件修复失败: {str(e2)}") from e
     return df
+def read_text(path):
+    with open(path, 'r') as file:
+        lines = file.readlines()
+    return lines
+def find_begrund_num(lines):
+    for line in lines:
+        if '地下室层数' in line:
+            num = int(line.split(':')[1].strip())
+            break
+    return num
 #主程序       
 if __name__ == "__main__":
-    num_beground = 4
+    direct = input('Please input the YJK model directory:')
+    wmass_path = direct + '/设计结果/wmass.out'  
+    quant_path = direct + '/上部结构工程量.txt' 
+    rebar_path = direct + '/施工图/钢筋用量.xlsx'
+    wmass_lines = read_text(wmass_path)
+    quant_lines = read_text(quant_path)
+    num_beground = find_begrund_num(wmass_lines)
     rebar_list = {}
-    df = repair_excel(file_path)
+    df = repair_excel(rebar_path)
     df_data = df[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()
     list=df_data['构件类别'].unique().tolist()
     list_ordi= ['板','梁','柱']
@@ -65,7 +79,7 @@ if __name__ == "__main__":
     rebar_list['面积'].append(df_b.groupby('楼层')['楼面面积(m2)'].first().sum())
     rebar_list['面积'].append(df_u.groupby('楼层')['楼面面积(m2)'].first().sum())
     series_b=df_b.groupby('构件类别')['合计(kg)'].sum()/1000
-    series_u=df_b.groupby('构件类别')['合计(kg)'].sum()/1000
+    series_u=df_u.groupby('构件类别')['合计(kg)'].sum()/1000
     for l in list :
         rebar_list[l] = []
         rebar_list[l].append(series_b[l])
@@ -84,7 +98,7 @@ if __name__ == "__main__":
     list_colu = df_rebar.columns[2:].tolist()
     for l in list_colu:
         df_rebar[f'{l}-单方'] = (df_rebar[l]/df_rebar['面积']*1000).round(1)
-    df_rebar.to_excel(directory + '钢筋用量-统计.xlsx',index=False)
+    df_rebar.to_excel(direct + '钢筋用量-统计.xlsx',index=False)
     print(df_rebar)
     print('统计完成')
 
