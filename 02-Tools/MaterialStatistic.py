@@ -1,4 +1,5 @@
 import openpyxl
+import re
 import pandas as pd
 import zipfile
 import os
@@ -43,15 +44,76 @@ def repair_excel(file_path):
             raise Exception(f"文件修复失败: {str(e2)}") from e
     return df
 def read_text(path):
-    with open(path, 'r') as file:
-        lines = file.readlines()
-    return lines
+    try:
+        with open(path, 'r') as file:
+            return file.readlines()
+    except Exception as e:
+        print(f'文件读取失败:\n{str(e)}')
+        # raise
+def read_text2(path):
+    try:
+        with open(path, 'r',encoding='utf-16') as file:
+            return file.readlines()
+    except Exception as e:
+        print(f'文件读取失败:\n{str(e)}')
+        # raise
 def find_begrund_num(lines):
     for line in lines:
         if '地下室层数' in line:
             num = int(line.split(':')[1].strip())
             break
     return num
+def extract_concsteel(chunk,data):
+        data.setdefault('楼层',[])
+        data.setdefault('板-砼',[])
+        data.setdefault('悬板-砼',[])
+        data.setdefault('梁-砼',[])
+        data.setdefault('柱-砼',[])
+        data.setdefault('墙-砼',[])
+        data.setdefault('梁-钢',[])
+        data.setdefault('柱-钢',[])
+        conc_flag,steel_flag = 0,0
+        chunk = [ck for ck in chunk if ck.strip()]
+        for list in chunk:
+            floor_match = re.search(r'第\s*(\d+)自然层',list)
+            if floor_match:
+                floor = int(floor_match.group(1))
+                data['楼层'].append(floor)
+                continue
+            if re.search('砼等级',list):
+                conc_flag = 1
+            if re.search('钢等级',list):
+                steel_flag = 1
+            if conc_flag and floor is not None:
+                list_conc = list.split()
+                if list_conc[0] == '楼板':
+                    floor_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
+                    data['板-砼'].append(round(sum(floor_conc),1))
+                if list_conc[0] == '悬挑板32':
+                    floor_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
+                    data['悬板-砼'].append(round(sum(floor_conc),1))   
+                if list_conc[0] == '梁':
+                    beam_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
+                    data['梁-砼'].append(round(sum(beam_conc),1))      
+                if list_conc[0] == '柱':
+                    beam_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
+                    data['柱-砼'].append(round(sum(beam_conc),1))                           
+                if list_conc[0] == '墙(总计)':
+                    wall_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
+                    data['墙-砼'].append(round(sum(wall_conc),1))
+                if '总面积' in list:
+                    conc_flag = 0
+            if steel_flag and floor is not None:
+                list_steel = list.split()
+                if list_steel[0] == '梁':
+                    beam_steel = [float(l) for l in list_steel[2:] if l.replace('.','',1).isdigit()]
+                    data['梁-钢'].append(round(sum(beam_steel),1))      
+                if list_steel[0] == '柱':
+                    col_steel = [float(l) for l in list_steel[2:] if l.replace('.','',1).isdigit()]
+                    data['柱-钢'].append(round(sum(col_steel),1))     
+                if '小计' in list:
+                    steel_flag = 0                      
+                    floor = None
 #主程序       
 if __name__ == "__main__":
     direct = input('Please input the YJK model directory:')
@@ -59,47 +121,52 @@ if __name__ == "__main__":
     quant_path = direct + '/上部结构工程量.txt' 
     rebar_path = direct + '/施工图/钢筋用量.xlsx'
     wmass_lines = read_text(wmass_path)
-    quant_lines = read_text(quant_path)
+    quant_lines = read_text2(quant_path)
     num_beground = find_begrund_num(wmass_lines)
-    rebar_list = {}
-    df = repair_excel(rebar_path)
-    df_data = df[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()
-    list=df_data['构件类别'].unique().tolist()
+    rebar_dict = {}
+    concsteel_dict = {}
+    extract_concsteel(quant_lines,concsteel_dict)
+    print(concsteel_dict['梁-砼'])
+    df_rebar0 = repair_excel(rebar_path)
+    df_rebar = df_rebar0[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()
+    list=df_rebar['构件类别'].unique().tolist()
     list_ordi= ['板','梁','柱']
     list_wall = [i for i in list if i not in list_ordi]
-    stories = df_data['楼层'].unique()
+    stories = df_rebar['楼层'].unique()
     stories_beground = stories[:num_beground]
     stories_upground = stories[num_beground:]
-    condition_beground = df_data['楼层'].isin(stories_beground)
-    condition_upground = df_data['楼层'].isin(stories_upground)   
-    df_b = df_data[condition_beground]
-    df_u = df_data[condition_upground]
-    rebar_list['范围'] = ['地下','地上']
-    rebar_list['面积'] = []
-    rebar_list['面积'].append(df_b.groupby('楼层')['楼面面积(m2)'].first().sum())
-    rebar_list['面积'].append(df_u.groupby('楼层')['楼面面积(m2)'].first().sum())
+    condition_beground = df_rebar['楼层'].isin(stories_beground)
+    condition_upground = df_rebar['楼层'].isin(stories_upground)   
+    df_b = df_rebar[condition_beground]
+    df_u = df_rebar[condition_upground]
+    rebar_dict['范围'] = ['地下','地上']
+    rebar_dict['面积'] = []
+    rebar_dict['面积'].append(df_b.groupby('楼层')['楼面面积(m2)'].first().sum())
+    rebar_dict['面积'].append(df_u.groupby('楼层')['楼面面积(m2)'].first().sum())
     series_b=df_b.groupby('构件类别')['合计(kg)'].sum()/1000
     series_u=df_u.groupby('构件类别')['合计(kg)'].sum()/1000
     for l in list :
-        rebar_list[l] = []
-        rebar_list[l].append(series_b[l])
-        rebar_list[l].append(series_u[l])
+        rebar_dict[l] = []
+        rebar_dict[l].append(series_b[l])
+        rebar_dict[l].append(series_u[l])
     # for l in list:
     #     rebar_list[l]=[]
     #     rebar_ele = df_b[(df_b['构件类别'] == l)]['合计(kg)'].sum()/1000
     #     rebar_list[l].append(rebar_ele)
     #     rebar_ele = df_u[(df_u['构件类别'] == l)]['合计(kg)'].sum()/1000
     #     rebar_list[l].append(rebar_ele)
-    df_rebar = pd.DataFrame(rebar_list)
-    df_rebar.iloc[:] = df_rebar.iloc[:].round(1)
-    df_rebar['墙'] = df_rebar[list_wall].sum(axis=1)
-    df_rebar['总'] = df_rebar[list].sum(axis=1)
-    df_rebar.drop(columns=list_wall,inplace=True)
-    list_colu = df_rebar.columns[2:].tolist()
+    df_mat_1 = pd.DataFrame(rebar_dict)
+    df_mat_1.iloc[:] = df_mat_1.iloc[:].round(1)
+    df_mat_1['墙'] = df_mat_1[list_wall].sum(axis=1)
+    df_mat_1['总'] = df_mat_1[list].sum(axis=1)
+    df_mat_1.drop(columns=list_wall,inplace=True)
+    list_colu = df_mat_1.columns[2:].tolist()
     for l in list_colu:
-        df_rebar[f'{l}-单方'] = (df_rebar[l]/df_rebar['面积']*1000).round(1)
-    df_rebar.to_excel(direct + '钢筋用量-统计.xlsx',index=False)
-    print(df_rebar)
+        df_mat_1[f'{l}-单方'] = (df_mat_1[l]/df_mat_1['面积']*1000).round(1)
+    str = re.search(r'\w*-(\w+)',direct.split('\\')[-1]).group(1)
+    df_mat_1.to_excel(direct + '/钢筋用量-统计-'+str+'.xlsx',index=False)
+    print(df_mat_1)
+    print(f'地下室层数:{num_beground}')
     print('统计完成')
 
 
