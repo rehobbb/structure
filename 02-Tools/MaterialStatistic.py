@@ -114,9 +114,23 @@ def extract_concsteel(chunk,data):
                 if '小计' in list:
                     steel_flag = 0                      
                     floor = None
+def output(direct,df):
+    str = re.search(r'\w*-(\w+)-(\w+)',direct.split('\\')[-1]).group(1)
+    df.to_excel(direct + '/钢筋用量-统计'+str+'.xlsx',index=False)
+    print(df)
+    print('统计完成')
+def sum_df(df):
+    sum_value = df.iloc[0,1:] + df.iloc[1,1:]
+    df_sum = pd.DataFrame({
+        '范围': ['总量'],  # 范围列赋值
+        **sum_value.to_dict()  # 解包数值列的和（自动匹配列名）
+    })
+    df_total = pd.concat([df,df_sum],axis=0,ignore_index=True)
+    return df_total
 #主程序       
 if __name__ == "__main__":
     direct = input('Please input the YJK model directory:')
+    direct = direct.rstrip('\\')
     wmass_path = direct + '/设计结果/wmass.out'  
     quant_path = direct + '/上部结构工程量.txt' 
     rebar_path = direct + '/施工图/钢筋用量.xlsx'
@@ -147,8 +161,9 @@ if __name__ == "__main__":
     series_u=df_u.groupby('构件类别')['合计(kg)'].sum()/1000
     for l in list :
         rebar_dict[l] = []
-        rebar_dict[l].append(series_b[l])
-        rebar_dict[l].append(series_u[l])
+        # Check if component type exists in each series, append 0 if not
+        rebar_dict[l].append(series_b[l] if l in series_b.index else 0)
+        rebar_dict[l].append(series_u[l] if l in series_u.index else 0)
     # for l in list:
     #     rebar_list[l]=[]
     #     rebar_ele = df_b[(df_b['构件类别'] == l)]['合计(kg)'].sum()/1000
@@ -163,10 +178,8 @@ if __name__ == "__main__":
     list_colu = df_mat_1.columns[2:].tolist()
     for l in list_colu:
         df_mat_1[f'{l}-单方'] = (df_mat_1[l]/df_mat_1['面积']*1000).round(1)
-    str = re.search(r'\w*-(\w+)',direct.split('\\')[-1]).group(1)
-    df_mat_1.to_excel(direct + '/钢筋用量-统计-'+str+'.xlsx',index=False)
-    print(df_mat_1)
-    print(f'地下室层数:{num_beground}')
-    print('统计完成')
+    df_total = sum_df(df_mat_1)
+    output(direct,df_total)
+
 
 
