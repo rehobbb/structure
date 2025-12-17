@@ -8,7 +8,8 @@ def repair_excel(file_path):
     # 尝试直接读取
     try:
         print("尝试直接读取Excel文件...")
-        df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
+        df = pd.read_excel(file_path, sheet_name='Sheet1', header=2)
+        df = df[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()            
         print("直接读取成功！")
         
     except Exception as e:
@@ -38,12 +39,12 @@ def repair_excel(file_path):
                 
                 # 读取修复后的文件
                 df = pd.read_excel(fixed_file, sheet_name='Sheet1', header=2)
-                df_1 = df[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()            
+                df = df[['楼层','构件类别','楼面面积(m2)','合计(kg)']].iloc[1:-2].copy().ffill()            
                 print("文件修复并读取成功！")
                 
         except Exception as e2:
             raise Exception(f"文件修复失败: {str(e2)}") from e
-    return df_1
+    return df
 def read_text(path):
     try:
         with open(path, 'r') as file:
@@ -115,27 +116,34 @@ def extract_concsteel(chunk,data):
                 if '小计' in list:
                     steel_flag = 0                      
                     floor = None
-def extract_rebar(df_rebar,data):   
-    list=df_rebar['构件类别'].unique().tolist()
+def extract_rebar(df):   
+    list=df['构件类别'].unique().tolist()
     list_ordi= ['板','梁','柱']
     list_wall = [i for i in list if i not in list_ordi]
-    list_column = ['楼层','面积',*list_ordi]
-    for l in list_column:
-        data.setdefault(l,[])
-    data['楼层'] = df_rebar['楼层'].unique()
-    data['面积'] = df_rebar.groupby('楼层',sort=False)['楼面面积(m2)'].first().tolist()
-    for l in list_ordi:
-       if df_rebar[df_rebar['构件类别']==l]['合计(kg)'].sum() > 0:
-        data[l] = (df_rebar[df_rebar['构件类别']==l]['合计(kg)']/1000).round(1).tolist()
-    for l in list_wall:
-       if df_rebar[df_rebar['构件类别']==l]['合计(kg)'].sum() > 0:
-        data[l] = (df_rebar[df_rebar['构件类别']==l]['合计(kg)']/1000).round(1).tolist()
-    max_len = max(len(v) for v in data.values())
-    for key in data:
-        data[key] += [0] * (max_len - len(data[key])) 
-    df_tmp = pd.DataFrame(data)
-    df_tmp['墙'] = (df_tmp[list_wall].sum(axis=1)/1000).round(1)
-    df_tmp.drop(columns=list_wall,inplace=True)
+    list_column = ['楼层','楼面面积(m2)',*list_ordi]
+    new_df_1 = df.groupby('楼层',sort=False)['楼面面积(m2)'].first()
+    new_df = df.pivot_table(index='楼层',columns='构件类别',values='合计(kg)',fill_value=0,aggfunc='first').reset_index()
+    new_df = new_df_1.merge(new_df,on='楼层',how='left')
+    if 
+    new_df = new_df[list_column]
+
+
+    # for l in list_column:
+    #     data.setdefault(l,[])
+    # data['楼层'] = df_rebar['楼层'].unique()
+    # data['面积'] = df_rebar.groupby('楼层',sort=False)['楼面面积(m2)'].first().tolist()
+    # for l in list_ordi:
+    #    if df_rebar[df_rebar['构件类别']==l]['合计(kg)'].sum() > 0:
+    #     data[l] = (df_rebar[df_rebar['构件类别']==l]['合计(kg)']/1000).round(1).tolist()
+    # for l in list_wall:
+    #    if df_rebar[df_rebar['构件类别']==l]['合计(kg)'].sum() > 0:
+    #     data[l] = (df_rebar[df_rebar['构件类别']==l]['合计(kg)']/1000).round(1).tolist()
+    # max_len = max(len(v) for v in data.values())
+    # for key in data:
+    #     data[key] += [0] * (max_len - len(data[key])) 
+    # df_tmp = pd.DataFrame(data)
+    # df_tmp['墙'] = (df_tmp[list_wall].sum(axis=1)/1000).round(1)
+    # df_tmp.drop(columns=list_wall,inplace=True)
     
 def output(direct,df):
     str = direct.split('\\')[-1].split('-')[1]
@@ -162,11 +170,10 @@ if __name__ == "__main__":
     quant_lines = read_text2(quant_path)
     df_rebar = repair_excel(rebar_path)
     num_beground = find_begrund_num(wmass_lines)
-    rebar_dict = {}
     concsteel_dict = {}
  #获取砼、型钢数据   
     extract_concsteel(quant_lines,concsteel_dict)
-    extract_rebar(df_rebar,rebar_dict)
+    extract_rebar(df_rebar)
     stories = df_rebar['楼层'].unique()
     stories_beground = stories[:num_beground]
     stories_upground = stories[num_beground:]
