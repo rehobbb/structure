@@ -130,7 +130,7 @@ def extract_rebar(df,num_beground):
     new_df.rename(columns={'楼面面积(m2)':'面积'},inplace=True)
     new_df['面积'] = new_df['面积'].round(0)
     new_df['墙'] = new_df[list_wall].sum(axis=1)
-    new_df[list_data]= new_df[list_data].div(1000).round(1)
+    new_df[list_data]= new_df[list_data].div(1000).round(0)
     new_df['总'] = new_df[list_data].sum(axis=1)
     new_df.drop(columns=list_wall,inplace=True)
     list_column =[*list_data,'总']
@@ -145,10 +145,12 @@ def extract_rebar(df,num_beground):
     new_df_u = new_df[bool_upground][['面积']+list_column]
     sum_b = new_df_b.sum().to_frame().T
     sum_u = new_df_u.sum().to_frame().T
+    sum_all = sum_b + sum_u
     cols = ['范围']+ new_df_b.columns.tolist()
     sum_b['范围'] = '地下'
     sum_u['范围'] = '地上'
-    df_sum = pd.concat([sum_b,sum_u],ignore_index=True)[cols]
+    sum_all['范围'] = '合计'   
+    df_sum = pd.concat([sum_b,sum_u,sum_all],ignore_index=True)[cols]
     for l in list_column:
         df_sum[l+'-单方'] = (df_sum[l].div(df_sum['面积'])*1000).round(1)
     return new_df,df_sum
