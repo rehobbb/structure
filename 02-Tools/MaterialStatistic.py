@@ -45,25 +45,22 @@ def repair_excel(file_path):
         except Exception as e2:
             raise Exception(f"文件修复失败: {str(e2)}") from e
     return df
-def read_text(path):
+def read_wmass(path):
     try:
         with open(path, 'r') as file:
             return file.readlines()
     except Exception as e:
         print(f'文件读取失败:\n{str(e)}')
         # raise
-def read_text2(path):
+def read_quant(path):
     try:
-        with open(path, 'r',encoding='utf-16') as file:   
-            txt_file = f.read()
-        txt_lines = re.split(r'(>第\s*\w+层:)',txt_file)
-        result = []
-        for i in range(1,len(txt_lines),2):
-            mark = txt_lines[i]
-            content = txt_lines[i+1] if (i+1) < len(txt_lines) else ''
-            result.append(mark+content.strip())
-        result[-1] = result[-1].split('>全楼统计:')[0]
-        return result
+        with open(path, 'r', encoding='utf-16') as f:
+            text = f.read()
+        # 编译正则：匹配“>第 数字 自然层:”，并保留分隔符
+        pattern= re.compile(r'(>第\s*\d+自然层:.*?)(?=>第\s*\d+自然层:|>全楼统计:)',re.DOTALL)
+        matches = pattern.findall(text)
+        matches = [m.strip() for m in matches]
+        return matches
     except Exception as e:
         print(f'文件读取失败:\n{str(e)}')   
 def find_begrund_num(lines):
@@ -91,61 +88,69 @@ def find_chunk(startflag,endflag,list):
                     continue
             i += 1
         return chunk
-def extract_concsteel(chunks,num_beground):
-        data.setdefault('楼层',[])
-        data.setdefault('板-砼',[])
-        data.setdefault('悬板-砼',[])
-        data.setdefault('梁-砼',[])
-        data.setdefault('柱-砼',[])
-        data.setdefault('墙-砼',[])
-        data.setdefault('梁-钢',[])
-        data.setdefault('柱-钢',[])
-        conc_flag,steel_flag = 0,0
-        for chunk in chunks:
-            
-
-
-        # chunk = [ck for ck in chunk if ck.strip()]
-        # for list in chunk:
-        #     floor_match = re.search(r'第\s*(\d+)自然层',list)
-        #     if floor_match:
-        #         floor = int(floor_match.group(1))
-        #         data['楼层'].append(floor)
-        #         continue
-        #     if re.search('砼等级',list):
-        #         conc_flag = 1
-        #     if re.search('钢等级',list):
-        #         steel_flag = 1
-        #     if conc_flag and floor is not None:
-        #         list_conc = list.split()
-        #         if list_conc[0] == '楼板':
-        #             floor_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
-        #             data['板-砼'].append(round(sum(floor_conc),1))
-        #         if list_conc[0] == '悬挑板32':
-        #             floor_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
-        #             data['悬板-砼'].append(round(sum(floor_conc),1))   
-        #         if list_conc[0] == '梁':
-        #             beam_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
-        #             data['梁-砼'].append(round(sum(beam_conc),1))      
-        #         if list_conc[0] == '柱':
-        #             beam_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
-        #             data['柱-砼'].append(round(sum(beam_conc),1))                           
-        #         if list_conc[0] == '墙(总计)':
-        #             wall_conc = [float(l) for l in list_conc[2:] if l.replace('.','',1).isdigit()]
-        #             data['墙-砼'].append(round(sum(wall_conc),1))
-        #         if '总面积' in list:
-        #             conc_flag = 0
-        #     if steel_flag and floor is not None:
-        #         list_steel = list.split()
-        #         if list_steel[0] == '梁':
-        #             beam_steel = [float(l) for l in list_steel[2:] if l.replace('.','',1).isdigit()]
-        #             data['梁-钢'].append(round(sum(beam_steel),1))      
-        #         if list_steel[0] == '柱':
-        #             col_steel = [float(l) for l in list_steel[2:] if l.replace('.','',1).isdigit()]
-        #             data['柱-钢'].append(round(sum(col_steel),1))     
-        #         if '小计' in list:
-        #             steel_flag = 0                      
-        #             floor = None
+def extract_conc(text,num_beground):
+    data_conc = {}
+    list_conc = ['楼层','面积','楼板','悬挑板','梁','柱','墙(总计)']
+    for l_c in list_conc:
+        data_conc.setdefault(l_c,[])
+    for chunk in text:
+        dict_conc = {}
+        floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
+        area_match = re.search(r'面积=\s*([\d.]+)',chunk)
+        data_conc['楼层'].append(floor_match.group(1))
+        data_conc['面积'].append(round(float(area_match.group(1)),0))
+        pattern_conc = r'\s*砼等级(.*?)(钢等级|$)'
+        match_conc = re.search(pattern_conc,chunk,re.DOTALL)
+        if match_conc:
+            chunk_conc_list = match_conc.group(1).split('\n')
+        for list in chunk_conc_list:
+            for l_c in list_conc[2:]:
+                if l_c in list:
+                    dict_conc[l_c] = list
+        for l_c in list_conc[2:]:
+            if l_c not in dict_conc:
+                data_conc[l_c].append(0)
+            else:
+                list_c = dict_conc[l_c].split()
+                conc = [float(l) for l in list_c[2:] if l.replace('.','',1).isdigit()]
+                data_conc[l_c].append(round(sum(conc),0))
+    df = pd.DataFrame(data_conc)
+    df['楼板'] = df['楼板'] + df['悬挑板']
+    df.rename(columns={'墙(总计)':'墙'},inplace=True)
+    df.drop(columns='悬挑板')
+    df['总']=df[df.columns[2:]].sum(axis=1)
+    list_column = df.columns[2:]
+    for l in list_column:
+        df[l+'-单方'] = (df[l].div(df['面积'])*1000).round(2)
+    
+    return data_conc
+def extract_steel(text,num_beground):
+    data_steel = {}
+    list_steel = ['楼层','面积','梁','柱','斜撑']
+    for l_s in list_steel:
+        data_steel.setdefault(l_s,[])
+    for chunk in text:
+        dict_steel = {}
+        floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
+        area_match = re.search(r'面积=\s*([\d.]+)',chunk)
+        data_steel['楼层'].append(floor_match.group(1))
+        data_steel['面积'].append(round(float(area_match.group(1)),0))
+        pattern_steel = r'\s*钢等级(.*?)$'
+        match_steel = re.search(pattern_steel,chunk,re.DOTALL)
+        if match_steel:
+            chunk_steel_list = match_steel.group(1).split('\n')
+        for list in chunk_steel_list:
+            for l_s in list_steel[2:]:
+                if l_s in list:
+                    dict_steel[l_s] = list
+        for l_s in list_steel[2:]:
+            if l_s not in dict_steel:
+                data_steel[l_s].append(0)
+            else:
+                list_s = dict_steel[l_s].split()
+                steel = [float(l) for l in list_s[2:] if l.replace('.','',1).isdigit()]
+                data_steel[l_s].append(round(sum(steel),1))  
+    return data_steel      
 def extract_rebar(df,num_beground):   
     list=df['构件类别'].unique().tolist()
     list_ordi= ['板','梁','柱']
@@ -184,7 +189,6 @@ def extract_rebar(df,num_beground):
     for l in list_column:
         df_sum[l+'-单方'] = (df_sum[l].div(df_sum['面积'])*1000).round(1)
     return new_df,df_sum
-
 def output(writer,df,sheetname):
     df.to_excel(writer,index=False,sheet_name=sheetname)
 
@@ -204,13 +208,15 @@ if __name__ == "__main__":
     wmass_path = direct + '/设计结果/wmass.out'  
     quant_path = direct + '/上部结构工程量.txt' 
     rebar_path = direct + '/施工图/钢筋用量.xlsx'
-    wmass_lines = read_text(wmass_path)
-    quant_chunks = read_text2(quant_path)
+    wmass_lines = read_wmass(wmass_path)
+    quant_text = read_quant(quant_path)
     df_rebar = repair_excel(rebar_path)
     num_beground = find_begrund_num(wmass_lines)
-    concsteel_dict = {}
+    conc_dict = {}
+    steel_dict = {}
  #获取砼、型钢数据   
-    extract_concsteel(quant_chunks,num_beground)
+    conc_dict = extract_conc(quant_text,num_beground)
+    steel_dict = extract_steel(quant_text,num_beground)
     df_rebar1,df_rebar_sum =extract_rebar(df_rebar,num_beground)
     str = direct.split('\\')[-1].split('-')[1]
     direct_output = direct + '/钢筋用量-统计-'+str+'.xlsx'
