@@ -3,7 +3,7 @@ import MaterialStatistic as ms
 from pathlib import Path
 father_direct = input('Please input the YJK models directory:')
 father_direct = father_direct.rstrip('\\')
-direct_output = father_direct + '/材料用量-统计.xlsx'
+direct_output = father_direct + '/材料用量-汇总.xlsx'
 flag = 0 #0代表全楼总量，1代表上部总量
 subdirs_names = [
     dir
@@ -23,7 +23,7 @@ for l in subdirs_names:
     else:
        df_sum1 = pd.concat([df_sum1,df_sum1_],axis=0)
 with pd.ExcelWriter(direct_output,engine='xlsxwriter') as writer:
-    col_width = 6
+    col_width = 7
     if flag == 0:
         ms.output(writer,df_sum0,'全楼总量',col_width=col_width)
     else:

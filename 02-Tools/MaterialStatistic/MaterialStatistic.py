@@ -70,14 +70,14 @@ def find_begrund_num(lines):
             num = int(line.split(':')[1].strip())
             break
     return num
-def process_df(df,num_beground,decimal):
+def process_df(df,num_beground,scale):
 #处理明细df，获取按楼层汇总数据
+    decimal = 2
     new_df = df.copy()
     columns_data0 = new_df.columns[2:]
     new_df['总'] = new_df[columns_data0].sum(axis=1)
     columns_data1 = new_df.columns[2:]
     columns_data2 = ['面积',*columns_data1]
-    scale = 1 if decimal == 2 else 1000
     for c in columns_data1:
         new_df[c+'单'] = (new_df[c].div(new_df['面积'])*scale).round(decimal)
     stories = new_df['楼层']
@@ -95,14 +95,14 @@ def process_df(df,num_beground,decimal):
     sum_u['范围'] = '地上'
     sum_all['范围'] = '全楼'
 #获取地上、地下、全楼汇总数据
-    df_sum = pd.concat([sum_b,sum_u,sum_all],ignore_index=True)[cols]
+    df_sum = pd.concat([sum_b,sum_u,sum_all],ignore_index=True)[cols].round(0)
     for l in columns_data1:
         df_sum[l+'单'] = (df_sum[l].div(df_sum['面积'])*scale).round(decimal)
     return new_df,df_sum
 def extract_conc(text):
 #根据型钢明细text，获取按楼层汇总数据
     data_conc = {}
-    list_conc = ['楼层','面积','板','悬挑板','梁','柱','墙(总计)']
+    list_conc = ['楼层','面积','楼板','悬挑板','梁','柱','墙(总计)']
     for l_c in list_conc:
         data_conc.setdefault(l_c,[])
     for chunk in text:
@@ -110,7 +110,7 @@ def extract_conc(text):
         floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
         area_match = re.search(r'面积=\s*([\d.]+)',chunk)
         data_conc['楼层'].append(int(floor_match.group(1)))
-        data_conc['面积'].append(round(float(area_match.group(1)),0))
+        data_conc['面积'].append(round(float(area_match.group(1)),2))
         pattern_conc = r'\s*砼等级(.*?)(钢等级|$)'
         match_conc = re.search(pattern_conc,chunk,re.DOTALL)
         if match_conc:
@@ -125,9 +125,9 @@ def extract_conc(text):
             else:
                 list_c = dict_conc[l_c].split()
                 conc = [float(l) for l in list_c[2:] if l.replace('.','',1).isdigit()]
-                data_conc[l_c].append(round(sum(conc),0))
+                data_conc[l_c].append(round(sum(conc),2))
     df = pd.DataFrame(data_conc)
-    df['板'] = df['板'] + df['悬挑板']
+    df['楼板'] = df['楼板'] + df['悬挑板']
     df.drop(columns='悬挑板',inplace=True)
     df.rename(columns={'墙(总计)':'墙'},inplace=True)
     return df
@@ -142,22 +142,25 @@ def extract_steel(text):
         floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
         area_match = re.search(r'面积=\s*([\d.]+)',chunk)
         data_steel['楼层'].append(int(floor_match.group(1)))
-        data_steel['面积'].append(round(float(area_match.group(1)),0))
+        data_steel['面积'].append(round(float(area_match.group(1)),2))
         pattern_steel = r'\s*钢等级(.*?)$'
         match_steel = re.search(pattern_steel,chunk,re.DOTALL)
         if match_steel:
             chunk_steel_list = match_steel.group(1).split('\n')
-        for list in chunk_steel_list:
+            for list in chunk_steel_list:
+                for l_s in list_steel[2:]:
+                    if l_s in list:
+                        dict_steel[l_s] = list
             for l_s in list_steel[2:]:
-                if l_s in list:
-                    dict_steel[l_s] = list
-        for l_s in list_steel[2:]:
-            if l_s not in dict_steel:
+                if l_s not in dict_steel:
+                    data_steel[l_s].append(0)
+                else:
+                    list_s = dict_steel[l_s].split()
+                    steel = [float(l) for l in list_s[2:] if l.replace('.','',1).isdigit()]
+                    data_steel[l_s].append(round(sum(steel),2))  
+        else:
+            for l_s in list_steel[2:]:
                 data_steel[l_s].append(0)
-            else:
-                list_s = dict_steel[l_s].split()
-                steel = [float(l) for l in list_s[2:] if l.replace('.','',1).isdigit()]
-                data_steel[l_s].append(round(sum(steel),0))  
     df = pd.DataFrame(data_steel)
     for l in df[2:].columns:
         if df[l].sum() == 0:
@@ -177,10 +180,10 @@ def extract_rebar(df):
     new_df = df_sr.merge(new_df,on='楼层',how='left')
     new_df.rename(columns={'楼面面积(m2)':'面积'},inplace=True)
     new_df['楼层'] = new_df['楼层'].str.extract(r'(\d+)',expand=False).astype(int)
-    new_df['面积'] = new_df['面积'].round(0)
+    new_df['面积'] = new_df['面积'].round(2)
     new_df['墙'] = new_df[list_wall].sum(axis=1)
     new_df.drop(columns=list_wall,inplace=True)
-    new_df[list_data]= new_df[list_data].div(1000).round(0)
+    new_df[list_data]= new_df[list_data].div(1000).round(2)
     return new_df
 def output(writer,df,sheetname,startrow=0,col_width=6):
 #输出到excel
@@ -239,14 +242,14 @@ def main_program(direct):
     df_rebar_excel = repair_excel(rebar_path)
     num_beground = find_begrund_num(wmass_lines)
     str = direct.split('\\')[-1].split('-')[1]
-    direct_output = direct + '/钢筋用量-统计-'+str+'.xlsx'
+    direct_output = direct + '/材料用量-统计-'+str+'.xlsx'
  #获取砼、型钢数据   
     df_conc0 = extract_conc(quant_text)
     df_steel0 = extract_steel(quant_text)
     df_rebar0 =extract_rebar(df_rebar_excel)
-    df_conc,df_conc_sum = process_df(df_conc0,num_beground,2)
-    df_steel,df_steel_sum = process_df(df_steel0,num_beground,1)
-    df_rebar,df_rebar_sum = process_df(df_rebar0,num_beground,1)
+    df_conc,df_conc_sum = process_df(df_conc0,num_beground,1)
+    df_steel,df_steel_sum = process_df(df_steel0,num_beground,1000)
+    df_rebar,df_rebar_sum = process_df(df_rebar0,num_beground,1000)
     dict_scope = {
         'global':['全楼','地上'],
         'upground':['地上','地上'],

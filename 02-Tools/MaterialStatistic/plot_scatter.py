@@ -79,7 +79,7 @@ def plot_scatter(df,wb,ws,head,num_beground,para):
             'layout':{
                 'x':0.2,
                 'y':0.12,
-                'width':0.65,
+                'width':0.75,
                 'height':0.75,
             },               
         })
