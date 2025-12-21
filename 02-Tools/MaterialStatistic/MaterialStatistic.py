@@ -94,6 +94,7 @@ def process_df(df,num_beground,decimal):
     sum_b['范围'] = '地下'
     sum_u['范围'] = '地上'
     sum_all['范围'] = '全楼'
+#获取地上、地下、全楼汇总数据
     df_sum = pd.concat([sum_b,sum_u,sum_all],ignore_index=True)[cols]
     for l in columns_data1:
         df_sum[l+'单'] = (df_sum[l].div(df_sum['面积'])*scale).round(decimal)
@@ -192,7 +193,8 @@ def output(writer,df,sheetname,startrow=0,col_width=6):
         })
     ws = writer.sheets[sheetname]
     ws.set_column(0,len(df.columns)+10,col_width,format_data) 
-def sum_df(df_conc,df_steel,df_rebar,scope):
+def sum_df(df_conc,df_steel,df_rebar,df_conc_sum,\
+            df_steel_sum,df_rebar_sum,scope):
 #根据三个材料明细df，获取汇总数据   
     scope_global = scope[0]
     scope_permit = scope[1]
@@ -227,10 +229,8 @@ def sum_df(df_conc,df_steel,df_rebar,scope):
     df_sum.insert(0,'面积',df_conc_sum[df_conc_sum['范围']==scope_global]['面积'].iloc[0])
     return df_sum
 #主程序       
-if __name__ == "__main__":
-#定义初始变量，获取文件内容
-    direct = input('Please input the YJK model directory:')
-    direct = direct.rstrip('\\')
+def main_program(direct):
+# 定义初始变量，获取文件内容
     wmass_path = direct + '/设计结果/wmass.out'  
     quant_path = direct + '/上部结构工程量.txt' 
     rebar_path = direct + '/施工图/钢筋用量.xlsx'
@@ -252,9 +252,11 @@ if __name__ == "__main__":
         'upground':['地上','地上'],
         }
 #获取全楼总量+地上单方
-    df_sum0 = sum_df(df_conc,df_steel,df_rebar,dict_scope['global'])
+    df_sum0 = sum_df(df_conc,df_steel,df_rebar,\
+    df_conc_sum,df_steel_sum,df_rebar_sum,dict_scope['global'])
  #获取地上总量+地上单方
-    df_sum1 = sum_df(df_conc,df_steel,df_rebar,dict_scope['upground'])
+    df_sum1 = sum_df(df_conc,df_steel,df_rebar,\
+    df_conc_sum,df_steel_sum,df_rebar_sum,dict_scope['upground'])
 #增加版本列
     df_sum0.insert(0,'版本',str)
     df_sum1.insert(0,'版本',str)
@@ -312,15 +314,18 @@ if __name__ == "__main__":
         ps(df_steel,wb,ws_steel,col_steel1,num_beground,dict_para['S1'])
         ps(df_rebar,wb,ws_rebar,col_rebar0,num_beground,dict_para['R0']) 
         ps(df_rebar,wb,ws_rebar,col_rebar1,num_beground,dict_para['R1'])
-   
-        
-    pd.set_option('display.unicode.ambiguous_as_wide', True)
-    pd.set_option('display.unicode.east_asian_width', True)
-    print('\n输出地上总量与地上单方用量:\n')
-    print('-'*70)
-    print(df_sum_simpl.to_string(justify='center'))
-    print('-'*70+'\n')
-    print('统计完成')
+    return df_sum0,df_sum1,df_sum_simpl
+if __name__ == "__main__":
+        direct = input('Please input the YJK model directory:')
+        direct = direct.rstrip('\\')
+        df_sum0,df_sum1,df_sum_simpl = main_program(direct)
+        pd.set_option('display.unicode.ambiguous_as_wide', True)
+        pd.set_option('display.unicode.east_asian_width', True)
+        print('\n输出地上总量与地上单方用量:\n')
+        print('-'*70)
+        print(df_sum_simpl.to_string(justify='center'))
+        print('-'*70+'\n')
+        print('统计完成')
 
 
 
