@@ -1,4 +1,5 @@
 import re
+import os
 import pandas as pd
 import zipfile
 import os
@@ -102,7 +103,7 @@ def process_df(df,num_beground,scale):
 def extract_conc(text):
 #根据型钢明细text，获取按楼层汇总数据
     data_conc = {}
-    list_conc = ['楼层','面积','楼板','悬挑板','梁','柱','墙(总计)']
+    list_conc = ['楼层','面积','楼板','悬挑板','梁','柱','斜','墙(总计)']
     for l_c in list_conc:
         data_conc.setdefault(l_c,[])
     for chunk in text:
@@ -110,7 +111,10 @@ def extract_conc(text):
         floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
         area_match = re.search(r'面积=\s*([\d.]+)',chunk)
         data_conc['楼层'].append(int(floor_match.group(1)))
-        data_conc['面积'].append(round(float(area_match.group(1)),2))
+        if area_match:
+            data_conc['面积'].append(round(float(area_match.group(1)),2))
+        else:
+            data_conc['面积'].append(0)
         pattern_conc = r'\s*砼等级(.*?)(钢等级|$)'
         match_conc = re.search(pattern_conc,chunk,re.DOTALL)
         if match_conc:
@@ -134,7 +138,7 @@ def extract_conc(text):
 def extract_steel(text):
 #根据型钢明细text，获取按楼层汇总数据
     data_steel = {}
-    list_steel = ['楼层','面积','梁','柱','斜撑']
+    list_steel = ['楼层','面积','梁','柱','斜']
     for l_s in list_steel:
         data_steel.setdefault(l_s,[])
     for chunk in text:
@@ -142,7 +146,10 @@ def extract_steel(text):
         floor_match = re.search(r'>第\s*(\d+)自然层:',chunk)
         area_match = re.search(r'面积=\s*([\d.]+)',chunk)
         data_steel['楼层'].append(int(floor_match.group(1)))
-        data_steel['面积'].append(round(float(area_match.group(1)),2))
+        if area_match:
+            data_steel['面积'].append(round(float(area_match.group(1)),2))
+        else:
+            data_steel['面积'].append(0)
         pattern_steel = r'\s*钢等级(.*?)$'
         match_steel = re.search(pattern_steel,chunk,re.DOTALL)
         if match_steel:
@@ -237,6 +244,9 @@ def main_program(direct):
     wmass_path = direct + '/设计结果/wmass.out'  
     quant_path = direct + '/上部结构工程量.txt' 
     rebar_path = direct + '/施工图/钢筋用量.xlsx'
+    # rebar_path = direct + '/施工图/钢筋用量.xlsx' if \
+    #     os.path.exists(direct + '/施工图/钢筋用量.xlsx') \
+    #             else direct + '/施工图/钢筋用量.xls'
     wmass_lines = read_wmass(wmass_path)
     quant_text = read_quant(quant_path)
     df_rebar_excel = repair_excel(rebar_path)
