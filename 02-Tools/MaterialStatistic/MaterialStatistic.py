@@ -251,7 +251,10 @@ def main_program(direct):
     quant_text = read_quant(quant_path)
     df_rebar_excel = repair_excel(rebar_path)
     num_beground = find_begrund_num(wmass_lines)
-    str = direct.split('\\')[-1].split('-')[1]
+    if '-' in direct.split('\\')[-1]:
+        str = direct.split('\\')[-1].split('-')[1]
+    else:
+        str = direct.split('\\')[-1]
     direct_output = direct + '/材料用量-统计-'+str+'.xlsx'
  #获取砼、型钢数据   
     df_conc0 = extract_conc(quant_text)
